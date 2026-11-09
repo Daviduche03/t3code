@@ -65,6 +65,7 @@ import { mergeProviderInstanceEnvironment } from "@t3tools/provider-core/server/
 import { t3OrchestrationSystemPrompt } from "@t3tools/provider-core/server/orchestrationInstructions";
 import { buildRuntimeInstructions } from "@t3tools/provider-core/server/runtimeInstructions";
 import * as OpenCodeRuntime from "./OpenCodeRuntime.ts";
+import { readExtraMcpServers } from "./extraMcpServers.ts";
 import { readableProviderErrorMessage } from "./providerErrorMessage.ts";
 import * as IdAllocator from "@t3tools/provider-core/server/IdAllocator";
 import { makeProviderFailure } from "@t3tools/provider-core/server/failure";
@@ -977,6 +978,38 @@ export const makeOpenCodeAdapterV2 = Effect.fn("makeOpenCodeAdapterV2")(function
                 oauth: false,
               },
             }),
+          );
+        }
+        // Extra servers from T3_ACP_EXTRA_MCP_SERVERS ride along with the
+        // session. One bad server must not kill the thread, so each add is
+        // failure-isolated with a warning.
+        for (const extra of readExtraMcpServers()) {
+          const config =
+            extra.kind === "local"
+              ? {
+                  type: "local" as const,
+                  command: [...extra.command],
+                  ...(extra.environment === undefined
+                    ? {}
+                    : { environment: { ...extra.environment } }),
+                }
+              : {
+                  type: "remote" as const,
+                  url: extra.url,
+                  ...(extra.headers === undefined
+                    ? {}
+                    : { headers: { ...extra.headers } }),
+                  oauth: false as const,
+                };
+          yield* OpenCodeRuntime.runOpenCodeSdk("mcp.add", () =>
+            client.mcp.add({ name: extra.name, config }),
+          ).pipe(
+            Effect.catchAll((cause) =>
+              Effect.logWarning(
+                `Could not add extra MCP server "${extra.name}" to OpenCode.`,
+                cause,
+              ),
+            ),
           );
         }
 

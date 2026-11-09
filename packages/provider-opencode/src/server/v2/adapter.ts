@@ -56,6 +56,7 @@ import * as ProviderHost from "@t3tools/provider-core/server/ProviderHost";
 import * as OpenCode2Client from "./OpenCode2Client.ts";
 import * as OpenCode2Server from "./OpenCode2Server.ts";
 import * as OpenCodeRuntime from "../OpenCodeRuntime.ts";
+import { readExtraMcpServers } from "../extraMcpServers.ts";
 import { readableProviderErrorMessage } from "../providerErrorMessage.ts";
 import * as McpProviderSessions from "@t3tools/provider-core/server/McpProviderSessions";
 import { buildRuntimeInstructions } from "@t3tools/provider-core/server/runtimeInstructions";
@@ -3121,6 +3122,39 @@ export const make = Effect.fn("OpenCode2Adapter.make")(function* (instanceId: Pr
             ),
           );
         if (mcpAvailable) state.mcp = wanted;
+      }
+      // Extra servers from T3_ACP_EXTRA_MCP_SERVERS ride along with the
+      // session, failure-isolated so one bad server cannot kill the thread.
+      for (const extra of readExtraMcpServers()) {
+        const config =
+          extra.kind === "local"
+            ? new Mcp.LocalConfig({
+                type: "local",
+                command: [...extra.command],
+                ...(extra.environment === undefined
+                  ? {}
+                  : { environment: { ...extra.environment } }),
+              })
+            : new Mcp.RemoteConfig({
+                type: "remote",
+                url: extra.url,
+                ...(extra.headers === undefined
+                  ? {}
+                  : { headers: { ...extra.headers } }),
+                oauth: false,
+              });
+        yield* client.mcp
+          .add({ server: extra.name, location: { directory }, config })
+          .pipe(
+            Effect.timeout(INVENTORY_TIMEOUT),
+            Effect.asVoid,
+            Effect.catchAllCause((cause) =>
+              Effect.logWarning(
+                `Could not add extra MCP server "${extra.name}" to OpenCode.`,
+                cause,
+              ),
+            ),
+          );
       }
       const instructions = [
         buildRuntimeInstructions({ harness: "OpenCode", model: turnInput.modelSelection.model }),
