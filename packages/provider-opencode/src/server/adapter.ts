@@ -1004,7 +1004,7 @@ export const makeOpenCodeAdapterV2 = Effect.fn("makeOpenCodeAdapterV2")(function
           yield* OpenCodeRuntime.runOpenCodeSdk("mcp.add", () =>
             client.mcp.add({ name: extra.name, config }),
           ).pipe(
-            Effect.catchAll((cause) =>
+            Effect.catchCause((cause) =>
               Effect.logWarning(
                 `Could not add extra MCP server "${extra.name}" to OpenCode.`,
                 cause,

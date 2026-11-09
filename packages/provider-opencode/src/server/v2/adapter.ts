@@ -3148,7 +3148,7 @@ export const make = Effect.fn("OpenCode2Adapter.make")(function* (instanceId: Pr
           .pipe(
             Effect.timeout(INVENTORY_TIMEOUT),
             Effect.asVoid,
-            Effect.catchAllCause((cause) =>
+            Effect.catchCause((cause) =>
               Effect.logWarning(
                 `Could not add extra MCP server "${extra.name}" to OpenCode.`,
                 cause,
