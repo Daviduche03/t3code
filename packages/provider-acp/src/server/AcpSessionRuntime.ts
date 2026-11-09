@@ -34,6 +34,7 @@ import * as HostProcess from "@t3tools/shared/HostProcess";
 
 import { signalProcessGroup } from "@t3tools/provider-core/server/processGroup";
 import { appendAcpStderrTail, sanitizeAcpStderrExcerpt } from "./stderr.ts";
+import { readExtraMcpServers, mergeExtraMcpServers } from "./extraMcpServers.ts";
 import {
   collectSessionConfigOptionValues,
   decideToolCallUpdateEmission,
@@ -2138,14 +2139,19 @@ export const make = Effect.fn("AcpSessionRuntime.make")(function* (
   ): ReadonlyArray<EffectAcpSchema.McpServer> => {
     const mcpCapabilities = initializeResult.agentCapabilities?.mcpCapabilities;
     const acpServers = activationOptions?.acpMcpServers ?? options.acpMcpServers ?? [];
-    if (mcpCapabilities?.acp === true && acpServers.length > 0) {
-      return acpServers;
-    }
-    const httpServers = activationOptions?.httpMcpServers ?? options.httpMcpServers ?? [];
-    if (mcpCapabilities?.http === true && httpServers.length > 0) {
-      return httpServers;
-    }
-    return activationOptions?.mcpServers ?? options.mcpServers ?? [];
+    const base =
+      mcpCapabilities?.acp === true && acpServers.length > 0
+        ? acpServers
+        : (() => {
+            const httpServers =
+              activationOptions?.httpMcpServers ?? options.httpMcpServers ?? [];
+            if (mcpCapabilities?.http === true && httpServers.length > 0) {
+              return httpServers;
+            }
+            return activationOptions?.mcpServers ?? options.mcpServers ?? [];
+          })();
+    const extra = readExtraMcpServers();
+    return mergeExtraMcpServers(base, extra);
   };
 
   const sessionSetupFields = (initializeResult: EffectAcpSchema.InitializeResponse) => {
